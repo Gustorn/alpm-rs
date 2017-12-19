@@ -218,9 +218,11 @@ impl Alpm {
   ///
   /// Returns [`Ordering::Less`] if a is newer than b, [`Ordering::Equal`] if a
   /// and b are the same version, or [`Ordering::Greater`] if b is newer than a.
-  pub fn vercmp(&self, a: &str, b: &str) -> Ordering {
-    let a = CString::new(a).expect("Cannot convert version to null terminated string");
-    let b = CString::new(b).expect("Cannot convert version to null terminated string");
+  pub fn vercmp<A, B>(&self, a: A, b: B) -> Ordering
+    where A: AsRef<str>,
+          B: AsRef<str> {
+    let a = CString::new(a.as_ref()).expect("Cannot convert version to null terminated string");
+    let b = CString::new(b.as_ref()).expect("Cannot convert version to null terminated string");
 
     unsafe {
       // int alpm_pkg_vercmp(const char *a, const char *b)
