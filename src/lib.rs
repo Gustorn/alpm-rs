@@ -9,9 +9,9 @@
 //! ```rust
 //! let pacman = alpm::Alpm::new().unwrap();
 //!
-//! assert_eq!("5.0.1-4".to_string(), pacman.query_package_version("pacman").unwrap());
 //! ```
 
+#![allow(non_camel_case_types)]
 
 extern crate libloading as so;
 #[macro_use] extern crate enum_primitive;
@@ -218,19 +218,20 @@ impl Alpm {
   ///
   /// Returns [`Ordering::Less`] if a is newer than b, [`Ordering::Equal`] if a
   /// and b are the same version, or [`Ordering::Greater`] if b is newer than a.
-  pub fn vercmp(&self, a: String, b: String) -> std::io::Result<Ordering> {
-    let a = try!( CString::new(a) );
-    let b = try!( CString::new(b) );
+  pub fn vercmp(&self, a: &str, b: &str) -> Ordering {
+    let a = CString::new(a).expect("Cannot convert version to null terminated string");
+    let b = CString::new(b).expect("Cannot convert version to null terminated string");
 
     unsafe {
       // int alpm_pkg_vercmp(const char *a, const char *b)
-      let pkg_vercmp: Symbol<fn(*const c_char, *const c_char) -> *const c_int> = try!( self.lib.get(b"alpm_pkg_vercmp\0") );
+      let pkg_vercmp: Symbol<fn(*const c_char, *const c_char) -> i32> = self.lib.get(b"alpm_pkg_vercmp\0")
+        .expect("Cannot load alpm_pkg_vercmp");
 
-      let ret = pkg_vercmp(a.as_ptr() as *const c_char, b.as_ptr() as *const c_char) as i32;
-
-      Ok(if ret < 0 { Ordering::Less }
-          else if ret > 0 { Ordering::Greater }
-          else { Ordering::Equal })
+      match pkg_vercmp(a.as_ptr(), b.as_ptr()) {
+        x if x < 0 => Ordering::Less,
+        x if x > 0 => Ordering::Greater,
+        _ => Ordering::Equal
+      }
     }
   }
 
@@ -279,7 +280,7 @@ mod tests {
   fn query_pacman() {
     let pacman = Alpm::new().unwrap();
 
-    assert_eq!("5.0.1-4".to_string(), pacman.query_package_version("pacman").unwrap());
+    assert!(pacman.query_package_version("pacman").is_ok());
   }
 
   #[test]
@@ -291,24 +292,17 @@ mod tests {
   }
 
   #[test]
-  fn query_hdf5() {
-    let pacman = Alpm::new().unwrap();
-
-    assert_eq!("1.10.0_patch1-1".to_string(), pacman.query_package_version("hdf5").unwrap());
-  }
-
-  #[test]
   fn vercmp_less() {
     use std::cmp::Ordering;
 
     let pacman = Alpm::new().unwrap();
 
-    assert_eq!(Ordering::Less, pacman.vercmp("1".to_string(), "1.0-2".to_string()).unwrap());
-    assert_eq!(Ordering::Less, pacman.vercmp("1.1".to_string(), "1.1.2".to_string()).unwrap());
-    assert_eq!(Ordering::Less, pacman.vercmp("1.1".to_string(), "1.2".to_string()).unwrap());
-    assert_eq!(Ordering::Less, pacman.vercmp("1.9".to_string(), "2".to_string()).unwrap());
-    assert_eq!(Ordering::Less, pacman.vercmp("1.1.10".to_string(), "2".to_string()).unwrap());
-    assert_eq!(Ordering::Less, pacman.vercmp("1".to_string(), "2".to_string()).unwrap());
+    assert_eq!(Ordering::Less, pacman.vercmp("1", "1.0-2"));
+    assert_eq!(Ordering::Less, pacman.vercmp("1.1", "1.1.2"));
+    assert_eq!(Ordering::Less, pacman.vercmp("1.1", "1.2"));
+    assert_eq!(Ordering::Less, pacman.vercmp("1.9", "2"));
+    assert_eq!(Ordering::Less, pacman.vercmp("1.1.10", "2"));
+    assert_eq!(Ordering::Less, pacman.vercmp("1", "2"));
   }
 
   #[test]
@@ -317,16 +311,14 @@ mod tests {
 
     let pacman = Alpm::new().unwrap();
 
-    assert_eq!(Ordering::Equal, pacman.vercmp("1.0".to_string(), "1.0-2".to_string()).unwrap());
-    assert_eq!(Ordering::Equal, pacman.vercmp("1:1-1".to_string(), "1:1-1".to_string()).unwrap());
+    assert_eq!(Ordering::Equal, pacman.vercmp("1.0", "1.0-2"));
+    assert_eq!(Ordering::Equal, pacman.vercmp("1:1-1", "1:1-1"));
   }
 
   #[test]
   fn vercmp_greater() {
     use std::cmp::Ordering;
-
     let pacman = Alpm::new().unwrap();
-
-    assert_eq!(Ordering::Greater, pacman.vercmp("2.0-1".to_string(), "1.0-1".to_string()).unwrap());
+    assert_eq!(Ordering::Greater, pacman.vercmp("2.0-1", "1.0-1"));
   }
 }
